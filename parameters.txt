@@ -1,0 +1,11 @@
+user=user
+password=password
+csv_path=example.csv
+exclusive_vlans=1,10,500,999
+trust_port_name=trust_port_name
+specific_text=specific_text
+specific_limit_rate=50
+default_limit_rate=10
+ignore_errors=False
+simulation=True
+timeout=60
