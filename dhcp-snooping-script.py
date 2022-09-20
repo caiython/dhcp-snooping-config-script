@@ -6,6 +6,7 @@ from os.path import exists
 from os import makedirs
 
 
+# Read the "parameters.txt" and return a dict.
 def readParameters(path):
     with open(path, 'r', encoding="utf-8") as parameters:
         result = {}
@@ -20,14 +21,13 @@ def readParameters(path):
             elif line.split('=')[0] == 'exclusive_vlans':
                 value = line.split('=')[1].strip()
             else:
-                print("Erro na leitura dos parâmetros. Pressione Enter para continuar...")
-                input()
+                raise Exception("Error reading parameters. Check file variables.")
                 return None
             result[key] = value
         return result
 
 
-# Retorna a porta confiável a partir do nome da porta padronizado
+# Returns the trusted port from the stardardized port name.
 def trustPort(int_status, trust_port_name):
     tuple_list = list(enumerate(int_status.split()))
     for i, text in tuple_list:
@@ -39,7 +39,7 @@ def trustPort(int_status, trust_port_name):
     return None
 
 
-# Retorna uma lista de portas não confiáveis.
+# Returns a list of untrusted ports.
 def untrustedPorts(int_status, trust_port):
     result = []
     for element in list(int_status.split()):
@@ -48,7 +48,7 @@ def untrustedPorts(int_status, trust_port):
     return result
 
 
-# Retorna uma lista de vlans
+# Returns a list of vlans.
 def vlanList(vlan_brief, exclusive_vlans=None):
     if exclusive_vlans is None:
         exclusive_vlans = []
@@ -61,7 +61,7 @@ def vlanList(vlan_brief, exclusive_vlans=None):
     return result
 
 
-# Retorna uma lista de portas contendo um conteúdo específico
+# Returns a list of ports that contain the given specific text
 def specificPorts(int_status, specific_text):
     result = []
     if specific_text is None:
@@ -76,14 +76,14 @@ def specificPorts(int_status, specific_text):
         return result
 
 
-# Retorna a data e o horário local
+# Returns the local date and time
 def dateTime():
     return f'[{datetime.datetime.today().strftime("%d/%m/%Y - %H:%M:%S")}] - '
 
 
-# Retorna uma lista de ips a partir de um arquivo ".csv" padronizado da seguinte maneira:
-# A primeira coluna deve conter o endereço IPv4 do host
-# A segunda coluna define se o programa realizará a configuração do endereço através do dado 'Y' para sim ou 'N' para não.
+# Returns a list of ips from a standardized ".csv" file as follows:
+# The first column must contain the IPv4 address of the host
+# The second column defines whether the program will configure the address through the data 'Y' for yes or 'N' for no.
 def ipListFromCSV(path):
     with open(path) as arquivo:
         result = []
@@ -99,9 +99,9 @@ def ipListFromCSV(path):
         return result
 
 
-# Define se a configuração allow untrusted partir de um arquivo ".csv" padronizado da seguinte maneira:
-# A primeira coluna deve conter o endereço IPv4 do host
-# A segunda coluna define se o programa realizará a configuração do endereço através do dado 'Y' para sim ou 'N' para não.
+# Defines whether the "allow untrusted" configuration should be executed from a standardized ".csv" file as follows:
+# The first column must contain the IPv4 address of the host
+# The third column defines whether the program will configure the address through the data 'Y' for yes or 'N' for no.
 def allowUntrusted(path, ip_address):
     with open(path) as arquivo:
         leitor = csv.reader(arquivo)
@@ -117,17 +117,8 @@ def allowUntrusted(path, ip_address):
                     pass
 
 
-# Função auxiliar para retornar as vlans exclusivas que forma definidas em conjunto com a equipe de redes.
-def exclusiveVlans():
-    result = [1, 6, 97, 99, 105, 146, 240, 500, 600, 650, 666, 675, 680, 690, 750, 777, 789, 800, 840, 900, 950, 999,
-              1002, 1003, 1004, 1005, 2000, 2001]
-    for i in range(301, 446):
-        result.append(i)
-    return result
-
-
-# Função auxiliar para definir a lista de comandos a serem executados
-def configCommands(vlan_list, csv_path, ip_address, porta_confiavel, portas_nao_confiaveis, portas_especificas,
+# Defines the list of commands to be executed
+def configCommands(vlan_list, csv_path, ip_address, porta_confiavel, portas_nao_confiaveis, specific_ports,
                    specific_limit_rate, default_limit_rate):
 
     result = []
@@ -144,16 +135,16 @@ def configCommands(vlan_list, csv_path, ip_address, porta_confiavel, portas_nao_
     if allowUntrusted(csv_path, ip_address):
         result.append(f"ip dhcp snooping information option allow-untrusted")
 
-    # interface {porta}
+    # interface {port}
     # ip dhcp snooping limit rate {limit_rate}
     for porta in portas_nao_confiaveis:
         result.append(f"interface {porta}")
-        if porta in portas_especificas:
+        if porta in specific_ports:
             result.append(f"ip dhcp snooping limit rate {specific_limit_rate}")
         else:
             result.append(f"ip dhcp snooping limit rate {default_limit_rate}")
 
-    # interface {porta_confiavel}
+    # interface {trust_port}
     # ip dhcp snooping trust
     result.append(f"interface {porta_confiavel}")
     result.append("ip dhcp snooping trust")
@@ -179,49 +170,53 @@ def configCommands(vlan_list, csv_path, ip_address, porta_confiavel, portas_nao_
 
 # Método main()
 def main():
-    # Parâmetros do Usuário
+    
+    # Assigns the user parameters to the "parameters" variable
     parameters = readParameters('parameters.txt')
+    
+    # Assignment of parameters to their respective variables
+    user = parameters['user']  # authentication user
+    password = parameters['password']  # authentication password
+    csv_path = parameters['csv_path']  # path to the ".csv" file
+    trust_port_name = parameters['trust_port_name']  # standardized name of the port that will be configured as trusted
+    specific_text = parameters['specific_text']  # specific text contained in specific ports
+    exclusive_vlans = parameters['exclusive_vlans']  # list of vlans that should not be included in the configuration
+    specific_limit_rate = parameters['specific_limit_rate']  # specific portas limit rate
+    default_limit_rate = parameters['default_limit_rate']  # default limit rate
+    ignore_errors = parameters['ignore_errors']  # bool expression to ignore errors
+    simulation = parameters['simulation']  # bool expression to simulate config
+    timeout = parameters['timeout']  # value in seconds for maximum connection attempt time
 
-    user = parameters['user']  # Usuário de autenticação
-    password = parameters['password']  # Senha de autenticação
-    csv_path = parameters['csv_path']  # Caminho para o arquivo ".csv"
-    trust_port_name = parameters['trust_port_name']  # Nome padronizado da porta que será configurada como confiável;
-    specific_text = parameters['specific_text']  # Texto específico contido nas portas específicas;
-    exclusive_vlans = parameters['exclusive_vlans']  # Lista de vlans que não devem ser incluídas na configuração
-    specific_limit_rate = parameters['specific_limit_rate']  # Limit rate das portas específicas
-    default_limit_rate = parameters['default_limit_rate']  # Limit rate padrão
-    ignore_errors = parameters['ignore_errors']  # Expressão bool para ignorar erros
-    simulation = parameters['simulation']  # Expressão bool para simular configuração
-    timeout = parameters['timeout']  # Valor em segundos para tempo máximo de tentativa de conexão
-
-    # Verifica se existe a pasta "reports" e, caso não exista, cria a mesma.
+    # Checks if the "reports" folder exists and, if not, creates it.
     if not exists('reports'):
         makedirs('reports')
 
-    # Cria o arquivo de relatório final dentro da pasta "reports"
+    # Create the report file with index 0 inside the "reports" folder
     report_file_name = f'reports/0-dhcp-snooping-config-report-({datetime.datetime.today().strftime("%d.%m.%Y_%H.%M.%S")}).txt'
     report = open(report_file_name, 'w', encoding="utf-8")
 
-    # Inicia a variável contadora
+    # Starts the counter variable
     counter = 0
+    
+    # Load the ip address list from the csv file
     ip_address_list = ipListFromCSV(csv_path)
 
     for ip_address in ip_address_list:
 
-        # Incremento do contador
+        # Increment the counter
         counter += 1
 
-        # Cria o documento de texto referente à configuração do endereço de ip atual na pasta "reports"
+        # Creates the text document referring to the configuration of the current ip address in the "reports" folder
         log = open(f'reports/{counter}-dhcp-snooping-config-log-[{ip_address}]-({datetime.datetime.today().strftime("%d.%m.%Y_%H.%M")}).txt', 'w', encoding="utf-8")
 
-        # Insere o endereço atual ao relatório
+        # Insert the current address to the report
         print(f"\n{counter} - {ip_address}...")
         report.write(f"\n{counter} - {ip_address}...")
 
-        # Início da definição de variáveis
-        log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=- Definição de Parâmetros -=-=-=-=-=-=-=-=-=-=-=-\n')
+        # Start of defining variables
+        log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-= PARAMETERS DEFINITION =-=-=-=-=-=-=-=-=-=-=-=-\n')
 
-        # Define os parâmetros do host
+        # Set host parameters
         log.write(f'{dateTime()}Definindo parâmetros do host...')
         Network_Device_1 = {"host": ip_address,
                             "username": user,
@@ -232,98 +227,98 @@ def main():
                             }
         log.write(f' OK!\n')
 
-        # Estabelece conexão com o host
+        # Establish connection to host
         try:
-            log.write(f'{dateTime()}Estabelecendo conexão com o equipamento {ip_address}...')
+            log.write(f'{dateTime()}Connecting to {ip_address}...')
             connection = ConnectHandler(**Network_Device_1)
             log.write(f' OK!\n')
         except netmiko.exceptions.AuthenticationException:
-            log.write(f' Erro de autenticação.\n')
-            log.write(f'{dateTime()}Configuração encerrada devido ao erro relatado.\n')
-            print(f"{counter} - {ip_address} - Erro de autenticação.")
-            report.write(f"\n{counter} - {ip_address} - Erro de autenticação.\n")
+            log.write(f' Auth error.\n')
+            log.write(f'{dateTime()}Terminated due to reported error.\n')
+            print(f"{counter} - {ip_address} - Auth error.")
+            report.write(f"\n{counter} - {ip_address} - Auth error.\n")
             if ignore_errors:
                 continue
             else:
                 break
         except netmiko.exceptions.ConfigInvalidException:
-            log.write(f' Erro de configuração do aparelho.\n')
-            log.write(f'{dateTime()}Configuração encerrada devido ao erro relatado.\n')
-            print(f"{counter} - {ip_address} - Erro de configuração do aparelho. ({Network_Device_1})")
-            report.write(f"{counter} - {ip_address} - Erro de configuração do aparelho. ({Network_Device_1})\n")
+            log.write(f' Device configuration error.\n')
+            log.write(f'{dateTime()}Terminated due to reported error.\n')
+            print(f"{counter} - {ip_address} - Device configuration error. ({Network_Device_1})")
+            report.write(f"{counter} - {ip_address} - Device configuration error. ({Network_Device_1})\n")
             if ignore_errors:
                 continue
             else:
                 break
         except netmiko.exceptions.NetmikoTimeoutException:
-            log.write(f' Tempo de conexão excedido.\n')
-            log.write(f'{dateTime()}Configuração encerrada devido ao erro relatado.\n')
-            print(f"{counter} - {ip_address} - Erro de timeout durante tentativa de conexão ssh. ({ip_address})")
-            report.write(f"\n{counter} - {ip_address} - Erro de timeout durante tentativa de conexão ssh. ({ip_address})\n")
+            log.write(f' Connection timeout.\n')
+            log.write(f'{dateTime()}Terminated due to reported error.\n')
+            print(f"{counter} - {ip_address} - Connection timeout. ({ip_address})")
+            report.write(f"\n{counter} - {ip_address} - Connection timeout. ({ip_address})\n")
             if ignore_errors:
                 continue
             else:
                 break
 
-        # Envia o comando "enable"
-        log.write(f'{dateTime()}Entrando com o comando \"enable\"...')
+        # Send "enable" command
+        log.write(f'{dateTime()}Sending "enable" command \"enable\"...')
         connection.enable()
         log.write(f' OK!\n')
 
-        # Resgata o hostname através do comando "sh run | in hostname | ex router"
-        log.write(f'{dateTime()}Resgatando hostname...')
+        # Assign the command "sh run | in hostname | ex router" output to the variable hostname
+        log.write(f'{dateTime()}Assigning hostname...')
         hostname = connection.send_command("sh run | in hostname | ex router")
         log.write(f' OK!\n')
 
-        # Resgata as vlans configuradas no host através do envio do comando "sh vlan brief"
-        log.write(f'{dateTime()}Resgatando vlan brief...')
+        # Assign the command "sh vlan brief" output to the variable vlan_brief
+        log.write(f'{dateTime()}Assigning vlan brief from host...')
         vlan_brief = connection.send_command("sh vlan brief")
         log.write(f' OK!\n')
 
-        # Resgata as interfaces do host através do envio do comando "sh int status"
-        log.write(f'{dateTime()}Resgatando int status...')
+        # Assign the command "sh int status" output to the variable int_status
+        log.write(f'{dateTime()}Assigning interface status from host...')
         int_status = connection.send_command("sh int status")
         log.write(f' OK!\n')
 
-        # Define a porta confiável
-        log.write(f'{dateTime()}Definindo porta confiável...')
-        porta_confiavel = trustPort(int_status, trust_port_name=trust_port_name)
-        if porta_confiavel is not None:
+        # Defines the trusted port
+        log.write(f'{dateTime()}Defining trusted port...')
+        trust_port = trustPort(int_status, trust_port_name=trust_port_name)
+        if trust_port is not None:
             log.write(f' OK!\n')
         else:
-            log.write(f' Erro: O host não possui nenhuma porta com o nome \"{trust_port_name}\".\n')
-            log.write(f'{dateTime()}Configuração encerrada devido ao erro relatado.\n')
+            log.write(f' Error: There is no port named \"{trust_port_name}\".\n')
+            log.write(f'{dateTime()}Terminated due to reported error.\n')
             log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n')
-            print(f"{counter} - {ip_address} - Erro: O host não possui nenhuma porta com o nome \"{trust_port_name}\".")
-            report.write(f"\n{counter} - {ip_address} - Erro: O host não possui nenhuma porta com o nome \"{trust_port_name}\".\n")
+            print(f"{counter} - {ip_address} - Error: There is no port named \"{trust_port_name}\".")
+            report.write(f"\n{counter} - {ip_address} - Error: There is no port named \"{trust_port_name}\".\n")
             if ignore_errors:
                 continue
             else:
                 break
 
-        # Define as portas não confiáveis
-        log.write(f'{dateTime()}Definindo portas não confiáveis...')
-        portas_nao_confiaveis = untrustedPorts(int_status, porta_confiavel)
+        # Defines the untrusted ports
+        log.write(f'{dateTime()}Defining the untrusted ports...')
+        untrusted_ports = untrustedPorts(int_status, trust_port)
         log.write(f' OK!\n')
 
-        # Lista as vlans a serem configuradas
-        log.write(f'{dateTime()}Definindo lista de vlans...')
+        # Defines the list of vlans to be configured
+        log.write(f'{dateTime()}Defining the list of vlans to be configured...')
         vlan_list = vlanList(vlan_brief, exclusive_vlans=exclusive_vlans)
         log.write(f' OK!\n')
 
-        # Definição das portas específicas
-        log.write(f'{dateTime()}Verificando portas específicas...')
-        portas_especificas = specificPorts(int_status, specific_text=specific_text)
+        # Defines the specific ports
+        log.write(f'{dateTime()}Defining the specific ports...')
+        specific_ports = specificPorts(int_status, specific_text=specific_text)
         log.write(f' OK!\n')
 
-        # Definição dos comandos de configuração
-        log.write(f'{dateTime()}Definindo lista de Comandos...')
-        config_commands = configCommands(vlan_list, csv_path, ip_address, porta_confiavel, portas_nao_confiaveis,
-                                         portas_especificas, specific_limit_rate, default_limit_rate)
+        # Defines the config commands
+        log.write(f'{dateTime()}Defining the config commands...')
+        config_commands = configCommands(vlan_list, csv_path, ip_address, trust_port, untrusted_ports,
+                                         specific_ports, specific_limit_rate, default_limit_rate)
         log.write(f' OK!\n')
         log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n\n\n')
 
-        # Configuração
+        # Configuration
         log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- CLI -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n')
         if not simulation:
             set_config = connection.send_config_set(config_commands)
@@ -334,8 +329,8 @@ def main():
                 log.write("\n")
         log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n\n\n')
 
-        # Exibição do resultado e informações de consulta
-        log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= RESULTADO =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n')
+        # Shows the result and additional information
+        log.write(f'{dateTime()}-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=- RESULTS -=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-\n\n')
         log.write(f'sh run | in hostname | ex router:\n\n{hostname}\n\n\n')
         ip_dhcp_snooping = connection.send_command("show ip dhcp snooping")
         log.write(f'show ip dhcp snooping\n\n{ip_dhcp_snooping}\n\n\n')
